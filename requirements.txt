@@ -1,0 +1,7 @@
+aiogram>=3.3,<4
+apscheduler==3.10.4
+SQLAlchemy>=2.0
+sqlmodel==0.0.14
+pydantic-settings>=2.2
+python-dotenv>=1.0
+pytz>=2024.1
