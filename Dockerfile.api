@@ -1,0 +1,19 @@
+# --- build stage (frontend) ---
+FROM node:20-alpine as build
+WORKDIR /app/webapp
+COPY webapp/package*.json ./
+RUN npm ci
+COPY webapp/ ./
+RUN npm run build
+
+# --- runtime stage (python) ---
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# скопировать исходники и собранный фронт
+COPY src/ ./src/
+COPY --from=build /app/webapp/dist ./webapp/dist
+
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

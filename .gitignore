@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.pytype/
+.coverage
+coverage.*
+htmlcov/
+
+# SQLite databases (локальные, в git не нужны)
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Env files (секреты)
+.env
+.env.*
+*.env
+
+# Node / React
+webapp/node_modules/
+webapp/.npm/
+webapp/dist/
+webapp/.vite/
+webapp/.cache/
+webapp/yarn.lock
+webapp/package-lock.json
+
+# IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Docker
+docker/*.env
+docker-compose.override.yml
+
+# Misc
+*.bak
+*.swp
