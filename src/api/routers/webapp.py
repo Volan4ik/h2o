@@ -60,9 +60,12 @@ async def tg_user_dep(x_tg_init_data: str = Header(None), init_data: str | None 
         raise HTTPException(401, "init_data required")
     return validate_init_data(raw, settings.INITDATA_TTL)
 
-# --- Pydantic модель ---
+# --- Pydantic модели ---
 class LogRequest(BaseModel):
     amount_ml: int
+
+class GoalRequest(BaseModel):
+    goal_ml: int
 
 @router.get("/today")
 async def today(data=Depends(tg_user_dep)):
@@ -112,6 +115,20 @@ async def stats_days(days: int = 7, data=Depends(tg_user_dep)):
         out.append({"date": iso, "ml": totals.get(iso, 0)})
         cur = cur + timedelta(days=1)
     return {"days": out, "goal_ml": u.goal_ml}
+
+@router.post("/goal")
+async def update_goal(payload: GoalRequest, data=Depends(tg_user_dep)):
+    uid = data["user"].get("id")
+    if payload.goal_ml < 500 or payload.goal_ml > 10000:
+        raise HTTPException(400, "goal_ml must be between 500 and 10000")
+    with session() as s:
+        u = s.exec(select(User).where(User.tg_id == uid)).first()
+        if not u:
+            raise HTTPException(404, "user not found")
+        u.goal_ml = payload.goal_ml
+        s.add(u)
+        s.commit()
+    return {"ok": True}
 
 @router.post("/reset")
 async def reset(data=Depends(tg_user_dep)):

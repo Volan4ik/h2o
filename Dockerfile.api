@@ -2,14 +2,21 @@
 FROM node:20-bullseye AS build
 WORKDIR /webapp
 
-# Настройка npm для стабильности
+# Настройка npm для стабильности и обход сетевых проблем
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm config set fetch-retry-mintimeout 20000 && \
     npm config set fetch-retry-maxtimeout 120000 && \
-    npm config set fetch-retries 3
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-factor 2
 
 COPY webapp/package*.json ./
-RUN npm install --legacy-peer-deps --no-audit --no-fund
+
+# Попытка установки с несколькими стратегиями
+RUN npm cache clean --force && \
+    (npm install --legacy-peer-deps --no-audit --no-fund --verbose || \
+     (sleep 10 && npm install --legacy-peer-deps --no-audit --no-fund --verbose) || \
+     (sleep 20 && npm install --legacy-peer-deps --no-audit --no-fund --verbose))
+
 COPY webapp/ ./
 RUN npm run build
 
