@@ -1,24 +1,41 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from ..shared.config import settings
-from ..shared.db import init_db
 from fastapi.staticfiles import StaticFiles
-import os
-from .routers.webapp import router as webapp_router
+from fastapi.responses import FileResponse
 
-app = FastAPI(title="Hydrate API")
+from src.api.routers import webapp
+from src.shared.db import init_db
+from src.shared.config import settings
 
-if settings.ALLOWED_ORIGINS:
-    origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
-    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app = FastAPI(title="Hydration API")
 
-init_db()
-app.include_router(webapp_router)
+# CORS (useful for local dev)
+allowed_origins = [o.strip() for o in (settings.ALLOWED_ORIGINS or "").split(",") if o.strip()]
+if not allowed_origins:
+    allowed_origins = ["*"] if settings.DEV_ALLOW_NO_INITDATA else [settings.WEBAPP_URL]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Роуты API
+app.include_router(webapp.router)
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 @app.get("/health")
-def health():
-    return {"ok": True}
+async def health():
+    return {"status": "ok"}
 
-dist_path = os.path.join(os.path.dirname(__file__), "../../webapp/dist")
-if os.path.isdir(dist_path):
-    app.mount("/", StaticFiles(directory=dist_path, html=True), name="webapp")
+# Подключаем фронт
+app.mount("/", StaticFiles(directory="webapp/dist", html=True), name="frontend")
+
+# Чтобы index.html открывался на /
+@app.get("/")
+async def serve_frontend():
+    return FileResponse("webapp/dist/index.html")

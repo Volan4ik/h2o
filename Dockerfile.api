@@ -1,19 +1,23 @@
-# --- build stage (frontend) ---
-FROM node:20-alpine as build
-WORKDIR /app/webapp
+# Этап сборки фронта
+FROM node:20-alpine AS build
+WORKDIR /webapp
 COPY webapp/package*.json ./
 RUN npm ci
 COPY webapp/ ./
 RUN npm run build
 
-# --- runtime stage (python) ---
-FROM python:3.11-slim
+# Этап API
+FROM python:3.11-slim AS api
 WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# скопировать исходники и собранный фронт
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
-COPY --from=build /app/webapp/dist ./webapp/dist
-
+# copy static built assets from the build stage
+COPY --from=build /webapp/dist ./webapp/dist
+# Ensure data dir exists inside container even without volume
+RUN mkdir -p /app/data
+EXPOSE 8000
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

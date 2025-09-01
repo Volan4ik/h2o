@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   api:
     build:
@@ -6,9 +5,10 @@ services:
       dockerfile: Dockerfile.api
     env_file: .env.api
     volumes:
-      - ./data:/Data
+      - ./data:/app/data
     ports:
       - "8000:8000"
+    depends_on: []
 
   bot:
     build:
@@ -16,4 +16,6 @@ services:
       dockerfile: Dockerfile.bot
     env_file: .env.bot
     volumes:
-      - ./data:/Data
+      - ./data:/app/data
+    depends_on:
+      - api

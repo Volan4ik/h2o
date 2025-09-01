@@ -1,30 +1,19 @@
-import os
 from sqlmodel import SQLModel, create_engine, Session
-from .config import settings
+from src.shared.config import settings
+import os
 
-_connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(settings.DATABASE_URL, connect_args=_connect_args)
+# Ensure SQLite directory exists when using file-based sqlite path
+if settings.DATABASE_URL.startswith("sqlite"):
+    # Extract path part after sqlite:/// or sqlite:////
+    db_path = settings.DATABASE_URL.split("sqlite:///")[-1]
+    dir_path = os.path.dirname(db_path) or "."
+    os.makedirs(dir_path, exist_ok=True)
 
-# APScheduler jobstore URL берём из env напрямую
-jobstore_url = settings.JOBSTORE_URL
-
-
-def ensure_sqlite_dirs():
-    for url in (settings.DATABASE_URL, settings.JOBSTORE_URL):
-        if url.startswith("sqlite:///"):
-            path = url.removeprefix("sqlite:///")
-        elif url.startswith("sqlite:////"):
-            path = url.removeprefix("sqlite:////")
-        else:
-            continue
-        d = os.path.dirname(path) or "."
-        os.makedirs(d, exist_ok=True)
-
+connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
 
 def init_db():
-    ensure_sqlite_dirs()
     SQLModel.metadata.create_all(engine)
 
-
-def session() -> Session:
+def session():
     return Session(engine)

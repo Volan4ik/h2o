@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    # env vars берём из окружения ИЗ .env (см. model_config ниже)
     BOT_TOKEN: str
     BOT_USERNAME: str | None = None
 
@@ -15,7 +14,10 @@ class Settings(BaseSettings):
     INITDATA_TTL: int = 3600
     DEFAULT_TZ: str = "UTC"
 
-    # ВАЖНО: читаем .env автоматически
+    # Dev options
+    DEV_ALLOW_NO_INITDATA: bool = True
+    DEV_USER_ID: int = 1
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 settings = Settings()
