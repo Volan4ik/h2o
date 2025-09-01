@@ -1,23 +1,25 @@
 # Этап сборки фронта
-FROM node:20-alpine AS build
+FROM node:20-bullseye AS build
 WORKDIR /webapp
+
+# Настройка npm для стабильности
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-retries 3
+
 COPY webapp/package*.json ./
-RUN npm ci
+RUN npm install --legacy-peer-deps --no-audit --no-fund
 COPY webapp/ ./
 RUN npm run build
 
 # Этап API
 FROM python:3.11-slim AS api
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
 COPY requirements.txt .
-RUN pip install --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
-# copy static built assets from the build stage
+# копируем билд фронта
 COPY --from=build /webapp/dist ./webapp/dist
-# Ensure data dir exists inside container even without volume
-RUN mkdir -p /app/data
-EXPOSE 8000
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

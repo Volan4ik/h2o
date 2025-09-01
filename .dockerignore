@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Environment files
+.env*
+
+# Data directory
+data/
+
+# Node modules (will be installed in container)
+webapp/node_modules/
+webapp/dist/
+webapp/build/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Documentation
+README.md

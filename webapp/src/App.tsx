@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { WaterBottle } from "./components/WaterBottle";
+import { WeeklyStats } from "./components/WeeklyStats";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
@@ -14,6 +15,7 @@ export default function App() {
   const [defaultGlass, setDefaultGlass] = useState(250);
   const [progress, setProgress] = useState(0);
   const [isGoalReached, setIsGoalReached] = useState(false);
+  const [weeklyStats, setWeeklyStats] = useState<{days: Array<{date: string, ml: number}>, goal_ml: number} | null>(null);
 
   // --- загрузка текущих данных ---
   async function loadToday() {
@@ -30,6 +32,16 @@ export default function App() {
     setIsGoalReached(data.consumed_ml >= data.goal_ml);
   }
 
+  // --- загрузка недельной статистики ---
+  async function loadWeeklyStats() {
+    const r = await fetch(`${API_BASE}/api/webapp/stats/days?days=7`, {
+      headers: { "X-Tg-Init-Data": tg?.initData || "" },
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    setWeeklyStats(data);
+  }
+
   // --- добавление воды (положительное или отрицательное) ---
   async function addWater(amount: number) {
     await fetch(`${API_BASE}/api/webapp/log`, {
@@ -41,6 +53,7 @@ export default function App() {
       body: JSON.stringify({ amount_ml: amount }),
     });
     await loadToday();
+    await loadWeeklyStats(); // Обновляем статистику после изменения
   }
 
   // --- сброс прогресса ---
@@ -50,10 +63,12 @@ export default function App() {
       headers: { "X-Tg-Init-Data": tg?.initData || "" },
     });
     await loadToday();
+    await loadWeeklyStats(); // Обновляем статистику после сброса
   }
 
   useEffect(() => {
     loadToday();
+    loadWeeklyStats();
   }, []);
 
   return (
@@ -90,21 +105,21 @@ export default function App() {
               <Button onClick={() => addWater(defaultGlass)} variant="outline">
                 +{defaultGlass}ml
               </Button>
-              <Button onClick={() => addWater(250)} variant="outline">
-                +250ml
-              </Button>
               <Button onClick={() => addWater(500)} variant="outline">
                 +500ml
+              </Button>
+              <Button onClick={() => addWater(750)} variant="outline">
+                +750ml
               </Button>
             </div>
 
             {/* Custom controls */}
             <div className="flex items-center justify-center gap-2">
               <Button onClick={() => addWater(-100)} variant="outline" size="sm">
-                <Minus className="h-4 w-4" /> -100ml
+                <Minus className="h-4 w-4" /> 100ml
               </Button>
               <Button onClick={() => addWater(100)} variant="outline" size="sm">
-                <Plus className="h-4 w-4" /> +100ml
+                <Plus className="h-4 w-4" /> 100ml
               </Button>
               <Button
                 onClick={resetWater}
@@ -155,6 +170,11 @@ export default function App() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {/* Weekly Statistics */}
+        {weeklyStats && (
+          <WeeklyStats days={weeklyStats.days} goalMl={weeklyStats.goal_ml} />
         )}
       </div>
     </div>

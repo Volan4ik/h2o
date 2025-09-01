@@ -1,6 +1,6 @@
 """
-Основной модуль планировщика.
-Теперь использует HydrationReminderService для умных напоминаний о питье воды.
+Модуль для запуска сервиса напоминаний о питье воды.
+Может использоваться как отдельный сервис или интегрироваться с ботом.
 """
 
 import asyncio
@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 async def main():
-    """Основная функция планировщика."""
-    logger.info("Запуск планировщика напоминаний о питье воды")
+    """Основная функция для запуска сервиса напоминаний."""
+    logger.info("Запуск сервиса напоминаний о питье воды")
     
     # Создаем бота для отправки уведомлений
     bot = Bot(token=settings.BOT_TOKEN)
@@ -30,21 +30,21 @@ async def main():
     try:
         # Запускаем сервис
         await reminder_service.start()
-        logger.info("Планировщик напоминаний успешно запущен")
+        logger.info("Сервис напоминаний успешно запущен")
         
         # Держим сервис запущенным
         while True:
-            await asyncio.sleep(3600)  # Проверяем каждый час
+            await asyncio.sleep(60)  # Проверяем каждую минуту
             
     except KeyboardInterrupt:
         logger.info("Получен сигнал остановки")
     except Exception as e:
-        logger.error(f"Ошибка в планировщике: {e}")
+        logger.error(f"Ошибка в сервисе напоминаний: {e}")
     finally:
         # Останавливаем сервис
         await reminder_service.stop()
         await bot.session.close()
-        logger.info("Планировщик остановлен")
+        logger.info("Сервис напоминаний остановлен")
 
 
 if __name__ == "__main__":
