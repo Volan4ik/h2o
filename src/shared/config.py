@@ -4,11 +4,12 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     BOT_USERNAME: str | None = None
 
-    DATABASE_URL: str = "sqlite:///./data/water.db"
-    JOBSTORE_URL: str = "sqlite:///./data/jobs.sqlite"
+    DATABASE_URL: str = "sqlite:////data/water.db"
+    JOBSTORE_URL: str = "sqlite:////data/jobs.sqlite"
 
-    WEBAPP_URL: str = "https://localhost:5173/"
-    API_BASE: str = "http://localhost:8000"
+
+    WEBAPP_URL: str = "https://h2o-back-tutas9.amvera.io/"
+    API_BASE: str = "https://h2o-back-tutas9.amvera.io/api"
     ALLOWED_ORIGINS: str | None = None
 
     INITDATA_TTL: int = 3600
