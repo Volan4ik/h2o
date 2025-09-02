@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 import { Droplets, Plus, Minus, RotateCcw } from "lucide-react";
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || "";
+const API_BASE = (import.meta as any).env?.VITE_API_URL || "";
 const tg = (window as any).Telegram?.WebApp;
 
 export default function App() {

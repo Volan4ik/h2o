@@ -2,7 +2,12 @@
 FROM node:20-bullseye AS build
 WORKDIR /webapp
 
-# Настройка npm для стабильности и обход сетевых проблем
+ARG VITE_API_URL
+ARG VITE_WEBAPP_URL
+ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_WEBAPP_URL=${VITE_WEBAPP_URL}
+
+# без NODE_ENV=production — devDeps установятся
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm config set fetch-retry-mintimeout 20000 && \
     npm config set fetch-retry-maxtimeout 120000 && \
@@ -10,12 +15,10 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm config set fetch-retry-factor 2
 
 COPY webapp/package*.json ./
-
-# Попытка установки с несколькими стратегиями
 RUN npm cache clean --force && \
-    (npm install --legacy-peer-deps --no-audit --no-fund --verbose || \
-     (sleep 10 && npm install --legacy-peer-deps --no-audit --no-fund --verbose) || \
-     (sleep 20 && npm install --legacy-peer-deps --no-audit --no-fund --verbose))
+    (npm ci --no-audit --verbose || \
+     (sleep 10 && npm ci --no-audit --verbose) || \
+     (sleep 20 && npm ci --no-audit --verbose))
 
 COPY webapp/ ./
 RUN npm run build
