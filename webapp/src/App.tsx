@@ -9,6 +9,27 @@ import { Droplets, Plus, Minus, RotateCcw } from "lucide-react";
 const API_BASE = (import.meta as any).env?.VITE_API_URL || "";
 const tg = (window as any).Telegram?.WebApp;
 
+function withInitQuery(url: string) {
+  const init = tg?.initData || "";
+  if (!init) return url;
+  const u = new URL(url, window.location.origin);
+  // добавляем как init_data (бэкенд принимает этот query)
+  if (!u.searchParams.get("init_data")) {
+    u.searchParams.set("init_data", init);
+  }
+  return u.pathname + u.search;
+}
+
+function authHeaders() {
+  const init = tg?.initData || "";
+  return init
+    ? {
+        "X-Tg-Init-Data": init,
+        Authorization: `tma ${init}`,
+      }
+    : {};
+}
+
 export default function App() {
   const [currentWater, setCurrentWater] = useState(0);
   const [dailyGoal, setDailyGoal] = useState(2000);
@@ -21,9 +42,8 @@ export default function App() {
 
   // --- загрузка текущих данных ---
   async function loadToday() {
-    const r = await fetch(`${API_BASE}/api/webapp/today`, {
-      headers: { "X-Tg-Init-Data": tg?.initData || "" },
-    });
+    const url = withInitQuery(`${API_BASE}/api/webapp/today`);
+    const r = await fetch(url, { headers: authHeaders() as any });
     if (!r.ok) return;
     const data = await r.json();
     setCurrentWater(data.consumed_ml);
@@ -36,9 +56,8 @@ export default function App() {
 
   // --- загрузка недельной статистики ---
   async function loadWeeklyStats() {
-    const r = await fetch(`${API_BASE}/api/webapp/stats/days?days=7`, {
-      headers: { "X-Tg-Init-Data": tg?.initData || "" },
-    });
+    const url = withInitQuery(`${API_BASE}/api/webapp/stats/days?days=7`);
+    const r = await fetch(url, { headers: authHeaders() as any });
     if (!r.ok) return;
     const data = await r.json();
     setWeeklyStats(data);
@@ -46,12 +65,10 @@ export default function App() {
 
   // --- добавление воды (положительное или отрицательное) ---
   async function addWater(amount: number) {
-    await fetch(`${API_BASE}/api/webapp/log`, {
+    const url = withInitQuery(`${API_BASE}/api/webapp/log`);
+    await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Tg-Init-Data": tg?.initData || "",
-      },
+      headers: { "Content-Type": "application/json", ...(authHeaders() as any) },
       body: JSON.stringify({ amount_ml: amount }),
     });
     await loadToday();
@@ -60,9 +77,10 @@ export default function App() {
 
   // --- сброс прогресса ---
   async function resetWater() {
-    await fetch(`${API_BASE}/api/webapp/reset`, {
+    const url = withInitQuery(`${API_BASE}/api/webapp/reset`);
+    await fetch(url, {
       method: "POST",
-      headers: { "X-Tg-Init-Data": tg?.initData || "" },
+      headers: authHeaders() as any,
     });
     await loadToday();
     await loadWeeklyStats(); // Обновляем статистику после сброса
@@ -75,12 +93,10 @@ export default function App() {
       return;
     }
     
-    await fetch(`${API_BASE}/api/webapp/goal`, {
+    const url = withInitQuery(`${API_BASE}/api/webapp/goal`);
+    await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Tg-Init-Data": tg?.initData || "",
-      },
+      headers: { "Content-Type": "application/json", ...(authHeaders() as any) },
       body: JSON.stringify({ goal_ml: newGoal }),
     });
     

@@ -39,45 +39,6 @@ export function WeeklyStats({ days, goalMl }: WeeklyStatsProps) {
       month: 'short'
     });
   };
-  
-
-  
-  // Создаем точки для плавной кривой
-  const maxValue = Math.max(...days.map(d => d.ml), goalMl);
-  const createSmoothCurvePath = () => {
-    if (days.length < 2) return '';
-    
-    const points = days.map((day, index) => {
-      const x = (index / (days.length - 1)) * 100;
-      const y = 100 - (day.ml / maxValue) * 80; // 80% высоты для кривой
-      return { x, y };
-    });
-    
-    let path = `M ${points[0].x},${points[0].y}`;
-    
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const next = points[i + 1];
-      
-      if (next) {
-        // Кривая Безье для плавности
-        const cp1x = prev.x + (curr.x - prev.x) / 3;
-        const cp1y = prev.y;
-        const cp2x = curr.x - (next.x - curr.x) / 3;
-        const cp2y = curr.y;
-        
-        path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${curr.x},${curr.y}`;
-      } else {
-        // Последняя точка - прямая линия
-        path += ` L ${curr.x},${curr.y}`;
-      }
-    }
-    
-    return path;
-  };
-
-  const curvePath = createSmoothCurvePath();
 
   return (
     <Card className="mt-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
