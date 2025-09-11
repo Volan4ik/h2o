@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     BOT_TOKEN: str
     BOT_USERNAME: str | None = None
+    ADDITIONAL_BOT_TOKENS: str | None = None  # comma-separated optional tokens for multi-bot setups
 
     DATABASE_URL: str = "sqlite:////data/water.db"
     JOBSTORE_URL: str = "sqlite:////data/jobs.sqlite"
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
 
     INITDATA_TTL: int = 3600
     DEFAULT_TZ: str = "UTC"
+    DEBUG_AUTH: bool = False
 
     # Dev options
     DEV_ALLOW_NO_INITDATA: bool = True

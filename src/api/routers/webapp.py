@@ -2,10 +2,11 @@ import hmac
 import hashlib
 import urllib.parse
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, Request
 from pydantic import BaseModel
 from sqlmodel import select, delete
 
@@ -15,6 +16,7 @@ from src.shared.models import User, WaterLog
 from src.domain.hydration.service import HydrationService as HS
 
 router = APIRouter(prefix="/api/webapp", tags=["webapp"])
+logger = logging.getLogger(__name__)
 
 # --- Telegram initData validation ---
 
@@ -24,6 +26,24 @@ def _secret_key_for_webapp(bot_token: str) -> bytes:
     (НЕ путать с Login Widget, где просто SHA256(BOT_TOKEN))
     """
     return hmac.new(key=b"WebAppData", msg=bot_token.encode(), digestmod=hashlib.sha256).digest()
+
+def _try_tokens_for_signature(init_data: str, tokens: list[str]) -> tuple[bool, str | None]:
+    """Пробует верифицировать подпись initData по списку токенов.
+    Возвращает (ok, matched_token_or_none)."""
+    parsed = _parse_init_data(init_data)
+    received_hash = parsed.get("hash")
+    if not received_hash:
+        return False, None
+    dcs = _data_check_string_raw(init_data)
+    for t in tokens:
+        try:
+            secret_key = _secret_key_for_webapp(t)
+            calc_hash = hmac.new(secret_key, dcs.encode(), hashlib.sha256).hexdigest()
+            if calc_hash == received_hash:
+                return True, t
+        except Exception:
+            continue
+    return False, None
 
 def _parse_init_data(init_data: str) -> dict:
     # Нужен только чтобы достать hash/auth_date/user как значения
@@ -68,10 +88,17 @@ def validate_init_data(init_data: str, lifetime: int = 3600) -> dict:
     # data_check_string должен быть собран из сырой строки
     dcs = _data_check_string_raw(init_data)
 
-    secret_key = _secret_key_for_webapp(settings.BOT_TOKEN)
-    calc_hash = hmac.new(secret_key, dcs.encode(), hashlib.sha256).hexdigest()
+    # Поддержка нескольких токенов (если один backend обслуживает несколько ботов)
+    tokens: list[str] = [settings.BOT_TOKEN]
+    if settings.ADDITIONAL_BOT_TOKENS:
+        tokens += [t.strip() for t in settings.ADDITIONAL_BOT_TOKENS.split(",") if t.strip()]
 
-    if calc_hash != received_hash:
+    ok, matched = _try_tokens_for_signature(init_data, tokens)
+    if not ok:
+        logger.warning(
+            "init_data signature mismatch: tried %d token(s); auth_date=%s; keys=%s",
+            len(tokens), parsed.get("auth_date"), ",".join(sorted(k for k in parsed.keys() if k != "hash"))
+        )
         raise HTTPException(401, "bad init_data signature")
 
     # user как JSON (как делает Telegram)
@@ -86,12 +113,28 @@ def validate_init_data(init_data: str, lifetime: int = 3600) -> dict:
 
     return {"raw": parsed, "user": user}
 
-async def tg_user_dep(
+def _raw_query_param(request: Request, name: str) -> str | None:
+    """Возвращает значение параметра из сырой query-строки без декодирования percent-escape.
+    Нужен, чтобы подпись Telegram считалась по оригинальной init_data строке.
+    """
+    try:
+        q = request.scope.get("query_string", b"") or b""
+        target = name.encode() + b"="
+        for part in q.split(b"&"):
+            if part.startswith(target):
+                # Берём всё после первого '=' как есть
+                return part.split(b"=", 1)[1].decode("utf-8", errors="ignore")
+    except Exception:
+        pass
+    return None
+
+def _extract_init_data_raw(
+    request: Request,
     x_tg_init_data: str | None = Header(default=None, alias="X-Tg-Init-Data"),
     telegram_init_data: str | None = Header(default=None, alias="Telegram-Init-Data"),
     x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
     authorization: str | None = Header(default=None, alias="Authorization"),
-    init_data: str | None = None,  # на случай передачи через query во время отладки
+    init_data: str | None = None,  # на случай передачи через query во время отладки (уже декодированная)
 ):
     # Пытаемся вытащить initData из нескольких стандартных мест:
     # - "X-Tg-Init-Data" (наш кастомный заголовок)
@@ -105,14 +148,95 @@ async def tg_user_dep(
                 raw = value.strip()
         except ValueError:
             pass
-    # Для локальной отладки разрешаем также query-параметр
+    # Для локальной/вебвью отладки пробуем сырые query-параметры без декодирования
+    if not raw:
+        for key in ("init_data", "initData", "tgWebAppData"):
+            q_raw = _raw_query_param(request, key)
+            if q_raw:
+                # Значение в query закодировано для URL. Декодируем РОВНО один раз,
+                # чтобы восстановить исходную строку initData (как в WebApp).
+                raw = urllib.parse.unquote_plus(q_raw)
+                break
+    # Последний шанс — уже декодированное значение из зависимостей FastAPI
     raw = raw or init_data
+    return raw
+
+async def tg_user_dep(
+    request: Request,
+    x_tg_init_data: str | None = Header(default=None, alias="X-Tg-Init-Data"),
+    telegram_init_data: str | None = Header(default=None, alias="Telegram-Init-Data"),
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    init_data: str | None = None,
+):
+    raw = _extract_init_data_raw(
+        request,
+        x_tg_init_data=x_tg_init_data,
+        telegram_init_data=telegram_init_data,
+        x_telegram_init_data=x_telegram_init_data,
+        authorization=authorization,
+        init_data=init_data,
+    )
     if not raw:
         if getattr(settings, "DEV_ALLOW_NO_INITDATA", False):
-            # Dev bypass: синтетический пользователь
             return {"raw": {}, "user": {"id": getattr(settings, "DEV_USER_ID", 0)}}
         raise HTTPException(401, "init_data required")
-    return validate_init_data(raw, getattr(settings, "INITDATA_TTL", 3600))
+    try:
+        return validate_init_data(raw, getattr(settings, "INITDATA_TTL", 3600))
+    except HTTPException as e:
+        # Логируем причину для диагностики
+        logger.warning("auth failed: %s", e.detail)
+        raise
+
+@router.get("/debug/auth")
+async def debug_auth(
+    request: Request,
+    x_tg_init_data: str | None = Header(default=None, alias="X-Tg-Init-Data"),
+    telegram_init_data: str | None = Header(default=None, alias="Telegram-Init-Data"),
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    init_data: str | None = None,
+):
+    """DEBUG: возвращает разбор initData и результат валидации. Включать только в DEV!"""
+    if not (settings.DEBUG_AUTH or settings.DEV_ALLOW_NO_INITDATA):
+        raise HTTPException(404)
+    raw = _extract_init_data_raw(
+        request,
+        x_tg_init_data=x_tg_init_data,
+        telegram_init_data=telegram_init_data,
+        x_telegram_init_data=x_telegram_init_data,
+        authorization=authorization,
+        init_data=init_data,
+    )
+    info: dict = {"received": bool(raw)}
+    if not raw:
+        info["error"] = "init_data missing"
+        return info
+    parsed = _parse_init_data(raw)
+    info["keys"] = sorted(parsed.keys())
+    info["auth_date"] = parsed.get("auth_date")
+
+    # TTL check
+    ttl = getattr(settings, "INITDATA_TTL", 3600)
+    info["ttl"] = ttl
+    if parsed.get("auth_date"):
+        try:
+            auth_ts = int(parsed["auth_date"])
+            delta = datetime.now(timezone.utc) - datetime.fromtimestamp(auth_ts, tz=timezone.utc)
+            info["age_seconds"] = int(delta.total_seconds())
+            info["expired"] = delta > timedelta(seconds=ttl)
+        except Exception:
+            info["age_seconds"] = None
+            info["expired"] = None
+
+    tokens: list[str] = [settings.BOT_TOKEN]
+    if settings.ADDITIONAL_BOT_TOKENS:
+        tokens += [t.strip() for t in settings.ADDITIONAL_BOT_TOKENS.split(",") if t.strip()]
+    ok, matched = _try_tokens_for_signature(raw, tokens)
+    info["signature_ok"] = ok
+    info["tokens_tried"] = len(tokens)
+    info["matched"] = bool(matched)
+    return info
 
 # --- Pydantic модели ---
 class LogRequest(BaseModel):

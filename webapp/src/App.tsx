@@ -17,7 +17,7 @@ function withInitQuery(url: string) {
   if (!u.searchParams.get("init_data")) {
     u.searchParams.set("init_data", init);
   }
-  return u.pathname + u.search;
+  return u.toString();
 }
 
 function authHeaders() {
@@ -28,6 +28,12 @@ function authHeaders() {
         Authorization: `tma ${init}`,
       }
     : {};
+}
+
+function notifyAuthError() {
+  const msg = "Ошибка авторизации в Telegram WebApp. Попробуйте открыть через меню Telegram заново.";
+  if (tg?.showAlert) tg.showAlert(msg);
+  else alert(msg);
 }
 
 export default function App() {
@@ -44,7 +50,10 @@ export default function App() {
   async function loadToday() {
     const url = withInitQuery(`${API_BASE}/api/webapp/today`);
     const r = await fetch(url, { headers: authHeaders() as any });
-    if (!r.ok) return;
+    if (!r.ok) {
+      notifyAuthError();
+      return;
+    }
     const data = await r.json();
     setCurrentWater(data.consumed_ml);
     setDailyGoal(data.goal_ml);
@@ -58,7 +67,10 @@ export default function App() {
   async function loadWeeklyStats() {
     const url = withInitQuery(`${API_BASE}/api/webapp/stats/days?days=7`);
     const r = await fetch(url, { headers: authHeaders() as any });
-    if (!r.ok) return;
+    if (!r.ok) {
+      notifyAuthError();
+      return;
+    }
     const data = await r.json();
     setWeeklyStats(data);
   }
@@ -66,11 +78,15 @@ export default function App() {
   // --- добавление воды (положительное или отрицательное) ---
   async function addWater(amount: number) {
     const url = withInitQuery(`${API_BASE}/api/webapp/log`);
-    await fetch(url, {
+    const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(authHeaders() as any) },
       body: JSON.stringify({ amount_ml: amount }),
     });
+    if (!r.ok) {
+      notifyAuthError();
+      return;
+    }
     await loadToday();
     await loadWeeklyStats(); // Обновляем статистику после изменения
   }
@@ -78,10 +94,14 @@ export default function App() {
   // --- сброс прогресса ---
   async function resetWater() {
     const url = withInitQuery(`${API_BASE}/api/webapp/reset`);
-    await fetch(url, {
+    const r = await fetch(url, {
       method: "POST",
       headers: authHeaders() as any,
     });
+    if (!r.ok) {
+      notifyAuthError();
+      return;
+    }
     await loadToday();
     await loadWeeklyStats(); // Обновляем статистику после сброса
   }
@@ -94,11 +114,15 @@ export default function App() {
     }
     
     const url = withInitQuery(`${API_BASE}/api/webapp/goal`);
-    await fetch(url, {
+    const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(authHeaders() as any) },
       body: JSON.stringify({ goal_ml: newGoal }),
     });
+    if (!r.ok) {
+      notifyAuthError();
+      return;
+    }
     
     setDailyGoal(newGoal);
     setShowGoalModal(false);
