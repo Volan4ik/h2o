@@ -34,7 +34,7 @@ def _try_tokens_for_signature(init_data: str, tokens: list[str]) -> tuple[bool, 
     received_hash = parsed.get("hash")
     if not received_hash:
         return False, None
-    dcs = _data_check_string_raw(init_data)
+    dcs = _data_check_string(parsed)
     for t in tokens:
         try:
             secret_key = _secret_key_for_webapp(t)
@@ -49,22 +49,16 @@ def _parse_init_data(init_data: str) -> dict:
     # Нужен только чтобы достать hash/auth_date/user как значения
     return dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
 
-def _data_check_string_raw(init_data: str) -> str:
+def _data_check_string(parsed: dict) -> str:
+    """Собираем data_check_string из URL-декодированных пар key=value, отсортированных по ключу.
+    Исключаем параметр hash и (если есть) signature.
     """
-    Собираем data_check_string из СЫРОЙ строки init_data:
-    - фильтруем параметр hash
-    - сортируем пары по имени ключа (левая часть до '=')
-    - сами пары НЕ декодируем и не перекодируем
-    """
-    parts = init_data.split("&")
-    pairs = []
-    for p in parts:
-        # пропускаем ровно hash, signature игнорируем на всякий случай
-        if p.startswith("hash=") or p.startswith("signature="):
+    items = []
+    for k in sorted(parsed.keys()):
+        if k in {"hash", "signature"}:
             continue
-        pairs.append(p)
-    pairs.sort(key=lambda s: s.split("=", 1)[0])
-    return "\n".join(pairs)
+        items.append(f"{k}={parsed[k]}")
+    return "\n".join(items)
 
 def validate_init_data(init_data: str, lifetime: int = 3600) -> dict:
     parsed = _parse_init_data(init_data)
@@ -85,8 +79,8 @@ def validate_init_data(init_data: str, lifetime: int = 3600) -> dict:
         if delta > timedelta(seconds=lifetime):
             raise HTTPException(401, "init_data expired")
 
-    # data_check_string должен быть собран из сырой строки
-    dcs = _data_check_string_raw(init_data)
+    # data_check_string строим из URL-декодированных пар key=value
+    dcs = _data_check_string(parsed)
 
     # Поддержка нескольких токенов (если один backend обслуживает несколько ботов)
     tokens: list[str] = [settings.BOT_TOKEN]
